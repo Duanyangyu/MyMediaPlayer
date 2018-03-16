@@ -46,7 +46,9 @@ public class VideoDecoder {
 
         mVideoSource = dataSource;
         Log.e(TAG,"dataSource:"+dataSource);
-        if (prepare()){
+        boolean prepare = prepare();
+        Log.e(TAG,"prepare:"+prepare);
+        if (prepare){
 
         }
     }
@@ -60,7 +62,7 @@ public class VideoDecoder {
             selectTrack(mVideoExtractor);
             String mime = mVideoFormat.getString(MediaFormat.KEY_MIME);
             Log.e(TAG,"mime="+mime);
-            mVideoDecoder = MediaCodec.createByCodecName(mime);
+            mVideoDecoder = MediaCodec.createDecoderByType(mime);
             mVideoDecoder.configure(mVideoFormat,null,null,0);
             mVideoDecoder.start();
         } catch (Exception e) {

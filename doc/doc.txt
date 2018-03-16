@@ -1,0 +1,8 @@
+
+
+1.需求：实现一个视频文件解封装，再封装回视频文件。
+熟悉视频编码解码的过程
+
+Video--->MediaCodec--->
+                        MediaMuxer--->File
+Audio--->MediaCodec--->

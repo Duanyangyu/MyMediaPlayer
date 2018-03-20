@@ -1,31 +1,42 @@
 package com.duanyy.media;
 
-import android.content.res.AssetManager;
+import android.content.Intent;
 import android.os.Environment;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.View;
 
 import com.duanyy.media.decoder.VideoDecoder;
 import com.duanyy.media.utils.FileUtils;
 
 import java.io.File;
-import java.io.IOException;
 
 public class MainActivity extends AppCompatActivity {
 
     public static final String TAG = "MainActivity";
+    private String filePath;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        String filePath = Environment.getExternalStorageDirectory()+File.separator+"preview.mp4";
-        File videoFile = new File(filePath);
+        filePath = Environment.getExternalStorageDirectory()+ File.separator+"preview.mp4";
+        handleVideoFile(filePath);
+
+    }
+
+    public void btnDecode(View view){
+        Intent intent = new Intent(this,VideoActivity.class);
+        startActivity(intent);
+    }
+
+    private void handleVideoFile(String targetPath){
+        File videoFile = new File(targetPath);
         if (videoFile.exists() && videoFile.length() > 0){
-            VideoDecoder decoder = new VideoDecoder();
-            decoder.setDataSource(videoFile.getAbsolutePath());
+
         }else {
             copyToExternal();
         }

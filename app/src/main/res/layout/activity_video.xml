@@ -7,9 +7,8 @@
 
     <com.duanyy.media.player.VideoPlayerView
         android:id="@+id/mVideoPlaerView"
-        android:layout_width="200dp"
-        android:layout_height="200dp"
-        android:layout_gravity="center"/>
+        android:layout_width="match_parent"
+        android:layout_height="0dp"/>
 
     <Button
         android:text="Play"

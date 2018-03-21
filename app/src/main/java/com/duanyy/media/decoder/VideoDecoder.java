@@ -7,7 +7,10 @@ import android.text.TextUtils;
 import android.util.Log;
 import android.view.Surface;
 
+import com.duanyy.media.utils.VideoSize;
+
 import java.nio.ByteBuffer;
+import java.security.acl.LastOwnerException;
 
 import static android.media.MediaCodec.INFO_OUTPUT_FORMAT_CHANGED;
 import static android.media.MediaCodec.INFO_TRY_AGAIN_LATER;
@@ -16,7 +19,7 @@ import static android.media.MediaCodec.INFO_TRY_AGAIN_LATER;
  * Created by Duanyy on 2017/7/22.
  * 使用：
  *  decoder.setDataSource()
- *  decoder.setSurface();
+ *  decoder.setSurface()
  *  decoder.prepare()
  *  decoder.play()
  */
@@ -84,7 +87,7 @@ public class VideoDecoder implements IDecoder{
         mVideoExtractor = new MediaExtractor();
         try {
             mVideoExtractor.setDataSource(mVideoSource);
-            selectTrack(mVideoExtractor);
+            mVideoFormat = selectTrack(mVideoExtractor);
             String mime = mVideoFormat.getString(MediaFormat.KEY_MIME);
             Log.e(TAG,"mime="+mime);
             mVideoDecoder = MediaCodec.createDecoderByType(mime);
@@ -98,22 +101,43 @@ public class VideoDecoder implements IDecoder{
         return success;
     }
 
-    private void selectTrack(MediaExtractor extractor){
+    /* 这个方法应该在prepare返回true以后调用 */
+    public VideoSize getVideoSize(){
+        if (mVideoFormat != null) {
+            int width = mVideoFormat.getInteger(MediaFormat.KEY_WIDTH);
+            int height = mVideoFormat.getInteger(MediaFormat.KEY_HEIGHT);
+            Log.e(TAG,"getVideoSize: width="+width+", height="+height);
+            return new VideoSize((float) width,(float)height);
+        }else {
+            return null;
+        }
+    }
+
+    public int getVideoRotation(){
+//        if (mVideoFormat != null) {
+//            int rotation = mVideoFormat.getInteger(MediaFormat.KEY_ROTATION);
+//            Log.e(TAG,"getVideoRotation rotation="+rotation);
+//            return rotation;
+//        }
+        return 0;
+    }
+
+    private MediaFormat selectTrack(MediaExtractor extractor){
         if (extractor == null) {
-            return;
+            return null;
         }
         int count = extractor.getTrackCount();
         for (int i = 0; i < count; i++) {
             MediaFormat format = extractor.getTrackFormat(i);
             String string = format.getString(MediaFormat.KEY_MIME);
             if (TextUtils.isEmpty(string))
-                return;
+                return null;
             if (string.startsWith("video")){
                 extractor.selectTrack(i);
-                mVideoFormat = format;
-                break;
+                return format;
             }
         }
+        return null;
     }
 
     private void decodeThread(){
@@ -167,9 +191,6 @@ public class VideoDecoder implements IDecoder{
                 }else if (outputBufferId == INFO_OUTPUT_FORMAT_CHANGED){
 
                 }else {
-//                    ByteBuffer outputBuffer = mVideoDecoder.getOutputBuffer(outputBufferId);
-//                    byte[] output = outputBuffer.array();
-//                    Log.e(TAG,"outputBuffer.size:"+output.length);
                     mVideoDecoder.releaseOutputBuffer(outputBufferId,true);
                 }
             }

@@ -9,13 +9,18 @@ import android.opengl.Matrix;
 import android.text.TextUtils;
 import android.util.AttributeSet;
 import android.util.Log;
+import android.view.Gravity;
 import android.view.Surface;
+import android.view.ViewTreeObserver;
+import android.widget.FrameLayout;
 
 import com.duanyy.media.decoder.VideoDecoder;
 import com.duanyy.media.glutil.BufferUtils;
 import com.duanyy.media.glutil.OpenGlUtils;
+import com.duanyy.media.utils.VideoSize;
 
 import java.nio.FloatBuffer;
+import java.security.acl.LastOwnerException;
 
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
@@ -39,6 +44,7 @@ public class VideoPlayerView extends GLSurfaceView implements IPlayer ,GLSurface
     private int mProgramId;
 
     private float[] mMVPMatrix = new float[16];
+    private float[] mVertexCoords;
 
     public VideoPlayerView(Context context) {
         this(context,null);
@@ -82,9 +88,24 @@ public class VideoPlayerView extends GLSurfaceView implements IPlayer ,GLSurface
 
     private void init(){
         setEGLContextClientVersion(2);
-
         setRenderer(this);
         setRenderMode(RENDERMODE_WHEN_DIRTY);
+
+        reLayoutSelf();
+    }
+
+    private void reLayoutSelf(){
+        getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
+            @Override
+            public void onGlobalLayout() {
+                getViewTreeObserver().removeOnGlobalLayoutListener(this);
+                int width = getWidth();
+                Log.e(TAG,"onGlobalLayout w="+width);
+                FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(width,width);
+                params.gravity = Gravity.TOP;
+                setLayoutParams(params);
+            }
+        });
     }
 
     private void initProgram(){
@@ -102,6 +123,9 @@ public class VideoPlayerView extends GLSurfaceView implements IPlayer ,GLSurface
             mDecoder.setSurface(surface);
             if (mDecoder.prepare()){
                 Log.e(TAG,"initDecoder prepared!");
+                VideoSize videoSize = mDecoder.getVideoSize();
+                calFragmentCoordsByVideoSize(videoSize);
+                int videoRotation = mDecoder.getVideoRotation();
             }
         }else {
             throw new RuntimeException("mVideoSource is null");
@@ -118,13 +142,14 @@ public class VideoPlayerView extends GLSurfaceView implements IPlayer ,GLSurface
 
     @Override
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {
-        initProgram();
         mPreviewTextureId = getPreviewTextureId();
         mPreviewSurfaceTexture = new SurfaceTexture(mPreviewTextureId);
         mPreviewSurfaceTexture.setOnFrameAvailableListener(mFrameAvailableListener);
 
         Surface surface = new Surface(mPreviewSurfaceTexture);
         initDecoder(surface);
+
+        initProgram();
         Log.e(TAG,"onSurfaceCreated");
     }
 
@@ -179,9 +204,23 @@ public class VideoPlayerView extends GLSurfaceView implements IPlayer ,GLSurface
         return texture[0];
     }
 
-    private static float mVertexCoords[] = {
-            -1f,-1f,  -1f,1f,  1f,-1f,  -1f,1f,  1f,1f,  1f,-1f
-    };
+    private void calFragmentCoordsByVideoSize(VideoSize size){
+        if (size == null) {
+            return;
+        }
+        float ratio = size.getWidth()/size.getHeight();
+
+        float left = -1,top = 1,right = 1,bottom = -1;
+        if (ratio > 1){
+            bottom = -1/ratio;
+            top = 1/ratio;
+        }else {
+            left = -ratio;
+            right = ratio;
+        }
+        Log.e(TAG,"calFragmentCoordsByVideoSize ratio="+ratio+", left="+left+", top="+top+", right="+right+", bottom="+bottom);
+        mVertexCoords = new float[]{left,bottom,left,top,right,bottom,left,top,right,top,right,bottom};
+    }
 
     private static float mFragmentCoords[] = {
             0f,0f,  0f,1f,  1f,0f,  0f,1f,  1f,1f,  1f,0f

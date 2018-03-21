@@ -3,6 +3,7 @@ package com.duanyy.media.decoder;
 import android.media.MediaCodec;
 import android.media.MediaExtractor;
 import android.media.MediaFormat;
+import android.media.MediaMetadataRetriever;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.Surface;
@@ -114,11 +115,17 @@ public class VideoDecoder implements IDecoder{
     }
 
     public int getVideoRotation(){
-//        if (mVideoFormat != null) {
-//            int rotation = mVideoFormat.getInteger(MediaFormat.KEY_ROTATION);
-//            Log.e(TAG,"getVideoRotation rotation="+rotation);
-//            return rotation;
-//        }
+        if (mVideoFormat != null) {
+            if (mVideoFormat.containsKey(MediaFormat.KEY_ROTATION)){
+                int rotation = mVideoFormat.getInteger(MediaFormat.KEY_ROTATION);
+                Log.e(TAG,"getVideoRotation rotation="+rotation);
+                return rotation;
+            }
+        }
+//        MediaMetadataRetriever retriever = new MediaMetadataRetriever();
+//        retriever.setDataSource(mVideoSource);
+//        int rotation = Integer.parseInt(retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION));
+//        Log.e(TAG,"getVideoRotation rotation="+rotation);
         return 0;
     }
 

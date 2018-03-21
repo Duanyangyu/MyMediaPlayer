@@ -16,7 +16,7 @@
 
 package com.duanyy.media.glutil;
 
-public class TextureChangeUtil {
+public class CoordinateUtils {
 
 	public static final float VERTEX_NO_ROTATION[] = {
 			-1.0f, -1.0f,
@@ -86,7 +86,7 @@ public class TextureChangeUtil {
             1.0f, 0.0f,
     };
 
-    private TextureChangeUtil() {
+    private CoordinateUtils() {
     }
 
     public static float[] getRotation(final Rotation rotation, final boolean flipHorizontal,

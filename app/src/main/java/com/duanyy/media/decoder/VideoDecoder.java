@@ -3,7 +3,6 @@ package com.duanyy.media.decoder;
 import android.media.MediaCodec;
 import android.media.MediaExtractor;
 import android.media.MediaFormat;
-import android.media.MediaMetadataRetriever;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.Surface;
@@ -11,7 +10,6 @@ import android.view.Surface;
 import com.duanyy.media.utils.VideoSize;
 
 import java.nio.ByteBuffer;
-import java.security.acl.LastOwnerException;
 
 import static android.media.MediaCodec.INFO_OUTPUT_FORMAT_CHANGED;
 import static android.media.MediaCodec.INFO_TRY_AGAIN_LATER;
@@ -76,6 +74,11 @@ public class VideoDecoder implements IDecoder{
 
         mVideoSource = dataSource;
         Log.e(TAG,"dataSource:"+dataSource);
+    }
+
+    @Override
+    public void release() {
+        //TODO release self.
     }
 
     public void setSurface(Surface surface){

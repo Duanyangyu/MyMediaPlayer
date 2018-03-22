@@ -12,4 +12,6 @@ public interface IPlayer {
     void pause();
     void resume();
 
+    void onDestroy();
+
 }

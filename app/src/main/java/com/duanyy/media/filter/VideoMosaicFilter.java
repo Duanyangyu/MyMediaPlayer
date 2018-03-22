@@ -2,10 +2,13 @@ package com.duanyy.media.filter;
 
 import android.opengl.GLES20;
 import android.opengl.Matrix;
+import android.util.Log;
 
 import com.duanyy.media.glutil.BufferUtils;
 import com.duanyy.media.glutil.FboHelper;
 import com.duanyy.media.glutil.OpenGlUtils;
+
+import java.nio.FloatBuffer;
 
 /**
  * Created by duanyy on 2018/3/21.
@@ -13,35 +16,53 @@ import com.duanyy.media.glutil.OpenGlUtils;
 
 public class VideoMosaicFilter extends BaseFilter{
 
+    private int mProgramMosaicId;
+    private FloatBuffer mVertexBufferMosaicBg;
 
     @Override
-    public void initCoordinates() {
-
-    }
-
-    @Override
-    public void initProgram() {
-        mProgramId = OpenGlUtils.loadProgram(VERTEX_SHADER, SIMPLE_MOSAIC_FRAGMENT_SHADER);
-        float[] vertex = { -1f,-1f,  -1f,1f,  1f,-1f,  -1f,1f,  1f,1f,  1f,-1f };
+    protected void initCoordinates() {
+        float[] vertexMosaicBg = { -1f,-1f,  -1f,1f,  1f,-1f,  -1f,1f,  1f,1f,  1f,-1f };
         float[] fragment = { 0f,0f,  0f,1f,  1f,0f,  0f,1f,  1f,1f,  1f,0f };
-        mVertexBuffer = BufferUtils.float2Buffer(vertex);
+        mVertexBufferMosaicBg = BufferUtils.float2Buffer(vertexMosaicBg);
         mFragmentBuffer = BufferUtils.float2Buffer(fragment);
-
-        Matrix.setIdentityM(mMVPMatrix,0);
     }
 
     @Override
-    public void initFbo(int width, int height) {
+    protected void initProgram() {
+        mProgramId = OpenGlUtils.loadProgram(VERTEX_SHADER, FRAGMENT_SHADER);
+        mProgramMosaicId = OpenGlUtils.loadProgram(VERTEX_SHADER, SIMPLE_MOSAIC_FRAGMENT_SHADER);
+    }
+
+    @Override
+    protected void initFbo(int width, int height) {
         mFbo = new FboHelper(width, height);
         mFbo.createFbo();
     }
 
     @Override
-    protected void release() {
+    public void release() {
         if (mFbo != null) {
             mFbo.close();
             mFbo = null;
         }
+        if (mProgramId >= 0){
+            GLES20.glDeleteProgram(mProgramId);
+            mProgramId = -1;
+        }
+        if (mProgramMosaicId >= 0){
+            GLES20.glDeleteProgram(mProgramMosaicId);
+            mProgramMosaicId = -1;
+        }
+    }
+
+    @Override
+    public void onSurfaceSizeChanged(int width,int height) {
+        this.initFbo(width,height);
+    }
+
+    public void setContentSize(float width,float height){
+        float[] array = calVertexCoordsByVideoSize(width,height);
+        mVertexBuffer = BufferUtils.float2Buffer(array);
     }
 
     @Override
@@ -49,30 +70,69 @@ public class VideoMosaicFilter extends BaseFilter{
         GLES20.glClear(GLES20.GL_DEPTH_BUFFER_BIT | GLES20.GL_COLOR_BUFFER_BIT);
 
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, mFbo.frameId());
-        GLES20.glUseProgram(mProgramId);
+        GLES20.glUseProgram(mProgramMosaicId);
 
-        int a_position = GLES20.glGetAttribLocation(mProgramId,"a_position");
-        int a_texture = GLES20.glGetAttribLocation(mProgramId,"a_texture");
-        int u_mvpMatrix = GLES20.glGetUniformLocation(mProgramId,"u_MVPMatrix");
+        int a_position = GLES20.glGetAttribLocation(mProgramMosaicId,"a_position");
+        int a_texture = GLES20.glGetAttribLocation(mProgramMosaicId,"a_texture");
+
+        //draw Mosaic background to FrameBuffer.
         GLES20.glEnableVertexAttribArray(a_position);
         GLES20.glEnableVertexAttribArray(a_texture);
-        GLES20.glVertexAttribPointer(a_position, 2, GLES20.GL_FLOAT, false, 0, mVertexBuffer);
+        mVertexBufferMosaicBg.position(0);
+        mFragmentBuffer.position(0);
+        GLES20.glVertexAttribPointer(a_position, 2, GLES20.GL_FLOAT, false, 0, mVertexBufferMosaicBg);
         GLES20.glVertexAttribPointer(a_texture, 2, GLES20.GL_FLOAT, false, 0, mFragmentBuffer);
-        GLES20.glUniformMatrix4fv(u_mvpMatrix,1,false,mMVPMatrix,0);
 
         if (textureId != OpenGlUtils.NO_TEXTURE) {
             GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
             GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textureId);
-            GLES20.glUniform1i(GLES20.glGetUniformLocation(mProgramId, "inputImageTexture"), 0);
+            GLES20.glUniform1i(GLES20.glGetUniformLocation(mProgramMosaicId, "inputImageTexture"), 0);
         }
-
         GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, 6);
+        GLES20.glDisableVertexAttribArray(a_position);
+        GLES20.glDisableVertexAttribArray(a_texture);
+
+        //draw Video to FrameBuffer.
+        GLES20.glUseProgram(mProgramId);
+        a_position = GLES20.glGetAttribLocation(mProgramId,"a_position");
+        a_texture = GLES20.glGetAttribLocation(mProgramId,"a_texture");
+        mVertexBuffer.position(0);
+        mFragmentBuffer.position(0);
+        GLES20.glEnableVertexAttribArray(a_position);
+        GLES20.glEnableVertexAttribArray(a_texture);
+        GLES20.glVertexAttribPointer(a_position, 2, GLES20.GL_FLOAT, false, 0, mVertexBuffer);
+        GLES20.glVertexAttribPointer(a_texture, 2, GLES20.GL_FLOAT, false, 0, mFragmentBuffer);
+        if (textureId != OpenGlUtils.NO_TEXTURE) {
+            GLES20.glActiveTexture(GLES20.GL_TEXTURE1);
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textureId);
+            GLES20.glUniform1i(GLES20.glGetUniformLocation(mProgramId, "inputImageTexture"), 1);
+        }
+        GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, 6);
+
         GLES20.glDisableVertexAttribArray(a_position);
         GLES20.glDisableVertexAttribArray(a_texture);
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0);
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
 
         GLES20.glUseProgram(0);
+    }
+
+    private float[] calVertexCoordsByVideoSize(float width,float height){
+
+        float ratio = width/height;
+
+        float left = -1,top = 1,right = 1,bottom = -1;
+
+        if (ratio > 1){
+            bottom = -1/ratio;
+            top = 1/ratio;
+        }else {
+            left = -ratio;
+            right = ratio;
+        }
+
+        Log.e(TAG,"calVertexCoordsByVideoSize ratio="+ratio+", left="+left+", top="+top+", right="+right+", bottom="+bottom);
+        return new float[] { left,bottom,left,top,right,bottom,left,top,right,top,right,bottom } ;
     }
 
     public static final String VERTEX_SHADER = "" +
@@ -86,6 +146,15 @@ public class VideoMosaicFilter extends BaseFilter{
                 "textureCoordinate = a_texture;\n" +
             "}\n";
 
+    public static final String FRAGMENT_SHADER = "" +
+            "varying highp vec2 textureCoordinate;\n" +
+            " \n" +
+            "uniform sampler2D inputImageTexture;\n" +
+            " \n" +
+            "void main()\n" +
+            "{\n" +
+            "     gl_FragColor = texture2D(inputImageTexture, textureCoordinate);\n" +
+            "}";
 
     public static final String SIMPLE_MOSAIC_FRAGMENT_SHADER = "" +
             "precision mediump float;\n" +

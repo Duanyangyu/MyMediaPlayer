@@ -10,6 +10,8 @@ import java.nio.FloatBuffer;
 
 public abstract class BaseFilter {
 
+    protected static final String TAG = BaseFilter.class.getSimpleName();
+
     protected FloatBuffer mVertexBuffer;
     protected FloatBuffer mFragmentBuffer;
     protected float[] mMVPMatrix = new float[16];
@@ -29,7 +31,9 @@ public abstract class BaseFilter {
 
     protected abstract void initProgram();
 
-    public abstract void initFbo(int width,int height);
+    protected abstract void initFbo(int width,int height);
+
+    public abstract void onSurfaceSizeChanged(int width,int height);
 
     public int getTargetTexture(){
         if (mFbo != null) {
@@ -38,7 +42,7 @@ public abstract class BaseFilter {
         return 0;
     }
 
-    protected abstract void release();
+    public abstract void release();
 
 
 

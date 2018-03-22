@@ -11,4 +11,6 @@ public interface IDecoder {
     void play();
     void pause();
     void resume();
+
+    void release();
 }

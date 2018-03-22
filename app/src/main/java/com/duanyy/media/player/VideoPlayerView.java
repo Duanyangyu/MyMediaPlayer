@@ -5,7 +5,6 @@ import android.graphics.SurfaceTexture;
 import android.opengl.GLES11Ext;
 import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
-import android.opengl.Matrix;
 import android.text.TextUtils;
 import android.util.AttributeSet;
 import android.util.Log;
@@ -16,12 +15,8 @@ import android.widget.FrameLayout;
 
 import com.duanyy.media.decoder.VideoDecoder;
 import com.duanyy.media.filter.VideoMosaicFilter;
-import com.duanyy.media.glutil.BufferUtils;
-import com.duanyy.media.glutil.FboHelper;
-import com.duanyy.media.glutil.OpenGlUtils;
+import com.duanyy.media.filter.VideoOESRender;
 import com.duanyy.media.utils.VideoSize;
-
-import java.nio.FloatBuffer;
 
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
@@ -40,19 +35,9 @@ public class VideoPlayerView extends GLSurfaceView implements IPlayer ,GLSurface
     private int mPreviewTextureId;
     private SurfaceTexture mPreviewSurfaceTexture;
 
-    private int mProgramIdOES;
-    private int mProgramId;
 
-    private FloatBuffer mVertexBuffer;
-    private FloatBuffer mVertexBuffer2;
-    private FloatBuffer mFragmentBuffer;
-    private float[] mMVPMatrix = new float[16];
-    private float[] mVertexCoords;
-    private float[] mVertexCoords2 = {-1f,-1f,  -1f,1f,  1f,-1f,  -1f,1f,  1f,1f,  1f,-1f};
-    private float[] mFragmentCoords = { 0f,0f,  0f,1f,  1f,0f,  0f,1f,  1f,1f,  1f,0f };
-
-    private FboHelper mFbo;
     private VideoMosaicFilter mMosaicFilter;
+    private VideoOESRender mVideoOESRender;
 
     public VideoPlayerView(Context context) {
         this(context,null);
@@ -94,6 +79,19 @@ public class VideoPlayerView extends GLSurfaceView implements IPlayer ,GLSurface
         }
     }
 
+    @Override
+    public void onDestroy() {
+        if (mDecoder != null) {
+            mDecoder.release();
+        }
+        if (mMosaicFilter != null) {
+            mMosaicFilter.release();
+        }
+        if (mVideoOESRender != null) {
+            mVideoOESRender.release();
+        }
+    }
+
     private void init(){
         setEGLContextClientVersion(2);
         setRenderer(this);
@@ -116,16 +114,6 @@ public class VideoPlayerView extends GLSurfaceView implements IPlayer ,GLSurface
         });
     }
 
-    private void initProgram(){
-        mProgramId = OpenGlUtils.loadProgram(VERTEX_SHADER,FRAGMENT_SHADER);
-        mProgramIdOES = OpenGlUtils.loadProgram(VERTEX_SHADER,FRAGMENT_SHADER_OES);
-        mVertexBuffer = BufferUtils.float2Buffer(mVertexCoords);
-        mVertexBuffer2 = BufferUtils.float2Buffer(mVertexCoords2);
-        mFragmentBuffer = BufferUtils.float2Buffer(mFragmentCoords);
-
-        Matrix.setIdentityM(mMVPMatrix,0);
-    }
-
     private void initDecoder(Surface surface){
         if (!TextUtils.isEmpty(mVideoSource)){
             mDecoder = new VideoDecoder();
@@ -134,31 +122,21 @@ public class VideoPlayerView extends GLSurfaceView implements IPlayer ,GLSurface
             if (mDecoder.prepare()){
                 Log.e(TAG,"initDecoder prepared!");
                 VideoSize videoSize = mDecoder.getVideoSize();
-                calFragmentCoordsByVideoSize(videoSize);
-                int videoRotation = mDecoder.getVideoRotation();
+                if (mMosaicFilter != null) {
+                    mMosaicFilter.setContentSize(videoSize.getWidth(),videoSize.getHeight());
+                }
             }
         }else {
             throw new RuntimeException("mVideoSource is null");
         }
     }
 
-    private void initFbo(int width,int height){
-        if (mFbo == null) {
-            mFbo = new FboHelper(width,height);
-            mFbo.createFbo();
-        }
-    }
-
-    private void releaseFbo() {
-        if (mFbo != null) {
-            mFbo.close();
-            mFbo = null;
-        }
-    }
-
     private void initFilter(){
         mMosaicFilter = new VideoMosaicFilter();
         mMosaicFilter.init();
+
+        mVideoOESRender = new VideoOESRender();
+        mVideoOESRender.init();
     }
 
     private SurfaceTexture.OnFrameAvailableListener mFrameAvailableListener = new SurfaceTexture.OnFrameAvailableListener() {
@@ -175,93 +153,36 @@ public class VideoPlayerView extends GLSurfaceView implements IPlayer ,GLSurface
         mPreviewSurfaceTexture = new SurfaceTexture(mPreviewTextureId);
         mPreviewSurfaceTexture.setOnFrameAvailableListener(mFrameAvailableListener);
 
+        initFilter();
+
         Surface surface = new Surface(mPreviewSurfaceTexture);
         initDecoder(surface);
-
-        initProgram();
-        initFilter();
         Log.e(TAG,"onSurfaceCreated");
     }
 
     @Override
     public void onSurfaceChanged(GL10 gl, int width, int height) {
-        initFbo(width,height);
-        mMosaicFilter.initFbo(width,height);
+        if (mMosaicFilter != null) {
+            mMosaicFilter.onSurfaceSizeChanged(width,height);
+        }
+        if (mVideoOESRender != null) {
+            mVideoOESRender.onSurfaceSizeChanged(width,height);
+        }
     }
 
     @Override
     public void onDrawFrame(GL10 gl) {
-        GLES20.glClear(GLES20.GL_DEPTH_BUFFER_BIT | GLES20.GL_COLOR_BUFFER_BIT);
-
         mPreviewSurfaceTexture.updateTexImage();
 
-        int textureId = -1;
+        int textureUse = -1;
         if (mMosaicFilter != null) {
             mMosaicFilter.drawFrame(mPreviewTextureId);
-            textureId = mMosaicFilter.getTargetTexture();
+            textureUse = mMosaicFilter.getTargetTexture();
         }
 
-        int a_position = GLES20.glGetAttribLocation(mProgramId,"a_position");
-        int a_texture = GLES20.glGetAttribLocation(mProgramId,"a_texture");
-        int u_mvpMatrix = GLES20.glGetUniformLocation(mProgramId,"u_MVPMatrix");
-
-        //bg
-        //1
-        GLES20.glUseProgram(mProgramId);
-        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER,mFbo.frameId());
-
-        GLES20.glEnableVertexAttribArray(a_position);
-        GLES20.glEnableVertexAttribArray(a_texture);
-        mVertexBuffer2.position(0);
-        mFragmentBuffer.position(0);
-        GLES20.glVertexAttribPointer(a_position,2,GLES20.GL_FLOAT,false,0,mVertexBuffer2);
-        GLES20.glVertexAttribPointer(a_texture,2,GLES20.GL_FLOAT,false,0,mFragmentBuffer);
-        GLES20.glUniformMatrix4fv(u_mvpMatrix,1,false,mMVPMatrix,0);
-
-        GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
-        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D,textureId);
-        int inputImageTextureId = GLES20.glGetUniformLocation(mProgramId, "inputImageTexture");
-        GLES20.glUniform1i(inputImageTextureId, 0);
-        GLES20.glDrawArrays(GLES20.GL_TRIANGLES,0,6);
-
-        //2
-        mVertexBuffer.position(0);
-        mFragmentBuffer.position(0);
-        GLES20.glVertexAttribPointer(a_position,2,GLES20.GL_FLOAT,false,0,mVertexBuffer);
-        GLES20.glVertexAttribPointer(a_texture,2,GLES20.GL_FLOAT,false,0,mFragmentBuffer);
-        GLES20.glUniformMatrix4fv(u_mvpMatrix,1,false,mMVPMatrix,0);
-
-        GLES20.glActiveTexture(GLES20.GL_TEXTURE1);
-        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D,mPreviewTextureId);
-        inputImageTextureId = GLES20.glGetUniformLocation(mProgramId, "inputImageTexture");
-        GLES20.glUniform1i(inputImageTextureId, 1);
-        GLES20.glDrawArrays(GLES20.GL_TRIANGLES,0,6);
-
-        GLES20.glDisableVertexAttribArray(a_position);
-        GLES20.glDisableVertexAttribArray(a_texture);
-
-        //oes
-        GLES20.glUseProgram(mProgramIdOES);
-        a_position = GLES20.glGetAttribLocation(mProgramIdOES,"a_position");
-        a_texture = GLES20.glGetAttribLocation(mProgramIdOES,"a_texture");
-        u_mvpMatrix = GLES20.glGetUniformLocation(mProgramIdOES,"u_MVPMatrix");
-        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER,0);
-        GLES20.glEnableVertexAttribArray(a_position);
-        GLES20.glEnableVertexAttribArray(a_texture);
-
-        mVertexBuffer2.position(0);
-        mFragmentBuffer.position(0);
-        GLES20.glVertexAttribPointer(a_position,2,GLES20.GL_FLOAT,false,0,mVertexBuffer2);
-        GLES20.glVertexAttribPointer(a_texture,2,GLES20.GL_FLOAT,false,0,mFragmentBuffer);
-        GLES20.glUniformMatrix4fv(u_mvpMatrix,1,false,mMVPMatrix,0);
-
-        GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
-        GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES,mFbo.textureId());
-        GLES20.glDrawArrays(GLES20.GL_TRIANGLES,0,6);
-
-        GLES20.glDisableVertexAttribArray(a_position);
-        GLES20.glDisableVertexAttribArray(a_texture);
-        GLES20.glUseProgram(0);
+        if (mVideoOESRender != null) {
+            mVideoOESRender.drawFrame(textureUse);
+        }
     }
 
     private int getPreviewTextureId(){
@@ -282,53 +203,4 @@ public class VideoPlayerView extends GLSurfaceView implements IPlayer ,GLSurface
         return texture[0];
     }
 
-    private void calFragmentCoordsByVideoSize(VideoSize size){
-        if (size == null) {
-            return;
-        }
-        float ratio = size.getWidth()/size.getHeight();
-
-        float left = -1,top = 1,right = 1,bottom = -1;
-
-        if (ratio > 1){
-            bottom = -1/ratio;
-            top = 1/ratio;
-        }else {
-            left = -ratio;
-            right = ratio;
-        }
-
-        Log.e(TAG,"calFragmentCoordsByVideoSize ratio="+ratio+", left="+left+", top="+top+", right="+right+", bottom="+bottom);
-        mVertexCoords = new float[] { left,bottom,left,top,right,bottom,left,top,right,top,right,bottom } ;
-    }
-
-    private static final String VERTEX_SHADER =
-            "uniform mat4 u_MVPMatrix;" +
-                    "attribute vec4 a_position;" +
-                    "attribute vec2 a_texture;" +
-                    "varying vec2 textureCoordinate;" +
-                    "void main()" +
-                    "{"+
-                    "gl_Position = u_MVPMatrix * a_position;"+
-                    "textureCoordinate = a_texture;" +
-                    "}";
-
-    private static final String FRAGMENT_SHADER_OES =
-            "#extension GL_OES_EGL_image_external : require\n"+
-                    "precision mediump float;" +
-                    "varying vec2 textureCoordinate;\n" +
-                    "uniform samplerExternalOES s_texture;\n" +
-                    "void main() {" +
-                    "  gl_FragColor = texture2D( s_texture, textureCoordinate );\n" +
-                    "}";
-
-    public static final String FRAGMENT_SHADER = "" +
-            "varying highp vec2 textureCoordinate;\n" +
-            " \n" +
-            "uniform sampler2D inputImageTexture;\n" +
-            " \n" +
-            "void main()\n" +
-            "{\n" +
-            "     gl_FragColor = texture2D(inputImageTexture, textureCoordinate);\n" +
-            "}";
 }

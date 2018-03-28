@@ -1,6 +1,8 @@
 package com.duanyy.media.decoder;
 
 import android.media.MediaCodec;
+import android.media.MediaCodecInfo;
+import android.media.MediaCodecList;
 import android.media.MediaExtractor;
 import android.media.MediaFormat;
 import android.text.TextUtils;
@@ -74,11 +76,24 @@ public class VideoDecoder implements IDecoder{
 
         mVideoSource = dataSource;
         Log.e(TAG,"dataSource:"+dataSource);
+//        int codecCount = MediaCodecList.getCodecCount();
+//        for (int i = 0; i < codecCount; i++) {
+//            MediaCodecInfo codecInfo = MediaCodecList.getCodecInfoAt(i);
+//            Log.e(TAG,"codecInfo="+codecInfo.getName());
+//        }
     }
 
     @Override
     public void release() {
-        //TODO release self.
+        if (mVideoDecoder != null) {
+            mVideoDecoder.release();
+        }
+        if (mVideoExtractor != null) {
+            mVideoExtractor.release();
+        }
+        if (mOutputSurface != null) {
+            mOutputSurface.release();
+        }
     }
 
     public void setSurface(Surface surface){

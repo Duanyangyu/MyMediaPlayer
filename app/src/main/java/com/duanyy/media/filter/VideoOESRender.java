@@ -90,13 +90,34 @@ public class VideoOESRender extends BaseFilter{
                     "textureCoordinate = a_texture;" +
                     "}";
 
+
+    /**
+     * 基本变换： 灰度变换
+     F(r) = b * 0.114 + g * 0.587 + r * 0.299;
+     F(g) = b * 0.114 + g * 0.587 + r * 0.299;
+     F(b) = b * 0.114 + g * 0.587 + r * 0.299;
+     F(a) = a;
+     */
     private static final String FRAGMENT_SHADER_OES =
             "#extension GL_OES_EGL_image_external : require\n"+
                     "precision mediump float;" +
                     "varying vec2 textureCoordinate;\n" +
                     "uniform samplerExternalOES s_texture;\n" +
                     "void main() {" +
-                    "  gl_FragColor = texture2D( s_texture, textureCoordinate );\n" +
+                    "  lowp vec4 tempColor = texture2D( s_texture, textureCoordinate );"+
+                    "  gl_FragColor.x = tempColor.x*0.299+tempColor.y*0.587+tempColor.z*0.114;\n" +
+                    "  gl_FragColor.y = tempColor.x*0.299+tempColor.y*0.587+tempColor.z*0.114;"+
+                    "  gl_FragColor.z = tempColor.x*0.299+tempColor.y*0.587+tempColor.z*0.114;"+
+                    "  gl_FragColor.w = tempColor.w;"+
                     "}";
+
+//    private static final String FRAGMENT_SHADER_OES =
+//            "#extension GL_OES_EGL_image_external : require\n"+
+//                    "precision mediump float;" +
+//                    "varying vec2 textureCoordinate;\n" +
+//                    "uniform samplerExternalOES s_texture;\n" +
+//                    "void main() {" +
+//                    "  gl_FragColor = texture2D( s_texture, textureCoordinate );"+
+//                    "}";
 
 }

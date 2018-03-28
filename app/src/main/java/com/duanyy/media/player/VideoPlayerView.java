@@ -183,6 +183,8 @@ public class VideoPlayerView extends GLSurfaceView implements IPlayer ,GLSurface
         if (mVideoOESRender != null) {
             mVideoOESRender.drawFrame(textureUse);
         }
+
+//        GLES20.glReadPixels();
     }
 
     private int getPreviewTextureId(){
